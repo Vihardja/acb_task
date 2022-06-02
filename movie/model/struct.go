@@ -4,7 +4,7 @@ import "time"
 
 type Metadata struct {
 	ID        int64     `db:"id" json:"id"`
-	CreatedAt time.Time `db:"created_at"`
+	CreatedAt time.Time `db:"created_at" json:"-"`
 }
 
 type MovieData struct {
