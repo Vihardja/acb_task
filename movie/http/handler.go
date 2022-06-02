@@ -2,10 +2,12 @@ package http
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"net/http"
 	"os"
+	"strconv"
 
 	"github.com/gorilla/mux"
 
@@ -23,6 +25,12 @@ func NewRequestHandler(mu movieusecase.MovieUsecase) {
 	myRouter := mux.NewRouter().StrictSlash(true)
 	myRouter.HandleFunc("/get_movie/{ID}", handler.GetMovie).Methods("GET")
 	//myRouter.HandleFunc("/movie_detail/{imdbID}", handler.GetMovieDetail).Methods("GET")
+
+	myRouter.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		// an example API handler
+		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
+	})
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
@@ -40,11 +48,19 @@ func (m *MovieHandler) GetMovie(w http.ResponseWriter, r *http.Request) {
 	var (
 		vars = mux.Vars(r)
 		id   = vars["ID"]
+		ctx  = r.Context()
 	)
 
-	resp, err := m.MovieUsecase.GetMovieDetail(id)
+	idNum, err := strconv.Atoi(id)
 	if err != nil {
-		log.Fatalln(err)
+		errMsg := errors.New("invalid movie id")
+		log.Fatalln(errMsg)
+	}
+
+	resp, err := m.MovieUsecase.GetMovieDetail(ctx, int64(idNum))
+	if err != nil {
+		errMsg := errors.New("movie id not found")
+		log.Fatalln(errMsg)
 	}
 
 	b, err := json.Marshal(resp)
