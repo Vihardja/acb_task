@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"fmt"
 	"log"
+	"os"
 
 	_ "github.com/go-sql-driver/mysql"
 )
@@ -14,17 +15,22 @@ import (
 func main() {
 	var (
 		dbUser                 = "root"
-		dbPwd                  = ""
+		dbPwd                  = "password"
 		instanceConnectionName = "studious-spot-352021:us-central1:acbmovie1"
 		dbName                 = "v1_movie"
 	)
 
-	dbURI := fmt.Sprintf("%s:%s@unix(/cloudsql/%s)/%s?parseTime=true", dbUser, dbPwd, instanceConnectionName, dbName)
+	socketDir, isSet := os.LookupEnv("DB_SOCKET_DIR")
+	if !isSet {
+		socketDir = "/cloudsql"
+	}
+
+	dbURI := fmt.Sprintf("%s:%s@unix(/%s/%s)/%s?parseTime=true", dbUser, dbPwd, socketDir, instanceConnectionName, dbName)
 
 	// dbPool is the pool of database connections.
 	dbPool, err := sql.Open("mysql", dbURI)
 	if err != nil {
-		log.Fatalln("sql.Open: %v", err)
+		log.Fatal(fmt.Errorf("sql.Open: %v", err))
 	}
 	err = dbPool.Ping()
 	if err != nil {

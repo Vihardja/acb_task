@@ -9,9 +9,11 @@ import (
 	"os"
 	"strconv"
 
-	"github.com/gorilla/mux"
-
+	"acb_task/movie/model"
 	movieusecase "acb_task/movie/usecase"
+
+	"github.com/gorilla/mux"
+	validator "gopkg.in/go-playground/validator.v9"
 )
 
 type MovieHandler struct {
@@ -23,20 +25,21 @@ func NewRequestHandler(mu movieusecase.MovieUsecase) {
 		MovieUsecase: mu,
 	}
 	myRouter := mux.NewRouter().StrictSlash(true)
-	myRouter.HandleFunc("/get_movie/{ID}", handler.GetMovie).Methods("GET")
-	//myRouter.HandleFunc("/movie_detail/{imdbID}", handler.GetMovieDetail).Methods("GET")
 
+	//Health Check API
 	myRouter.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
 		// an example API handler
 		json.NewEncoder(w).Encode(map[string]bool{"ok": true})
 	})
 
+	myRouter.HandleFunc("/get_movies", handler.GetMovies).Methods("GET")
+	myRouter.HandleFunc("/get_movie/{ID}", handler.GetMovieDetail).Methods("GET")
+	myRouter.HandleFunc("/add_movie", handler.AddMovie).Methods("POST")
+
 	port := os.Getenv("PORT")
 	if port == "" {
 		port = "8080"
 	}
-	log.Println("Ver2")
-	log.Println("ACB_Movie REST API listening on port", port)
 
 	err := http.ListenAndServe(fmt.Sprintf(":%s", port), myRouter)
 	if err != nil {
@@ -45,7 +48,29 @@ func NewRequestHandler(mu movieusecase.MovieUsecase) {
 
 }
 
-func (m *MovieHandler) GetMovie(w http.ResponseWriter, r *http.Request) {
+func (m *MovieHandler) GetMovies(w http.ResponseWriter, r *http.Request) {
+	var (
+		ctx = r.Context()
+	)
+
+	resp, err := m.MovieUsecase.GetMovies(ctx)
+	if err != nil {
+		errMsg := errors.New("failed to get movies")
+		log.Fatalln(errMsg)
+	}
+
+	b, err := json.Marshal(resp)
+	if err != nil {
+		log.Fatalln("error: ", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write(b)
+
+}
+
+func (m *MovieHandler) GetMovieDetail(w http.ResponseWriter, r *http.Request) {
 	var (
 		vars = mux.Vars(r)
 		id   = vars["ID"]
@@ -60,13 +85,13 @@ func (m *MovieHandler) GetMovie(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := m.MovieUsecase.GetMovieDetail(ctx, int64(idNum))
 	if err != nil {
-		errMsg := errors.New("movie id not found")
+		errMsg := errors.New("failed to get movie data")
 		log.Fatalln(errMsg)
 	}
 
 	b, err := json.Marshal(resp)
 	if err != nil {
-		fmt.Println("error:", err)
+		log.Fatalln("error: ", err)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
@@ -75,23 +100,44 @@ func (m *MovieHandler) GetMovie(w http.ResponseWriter, r *http.Request) {
 
 }
 
-// func (m *MovieHandler) AddMovie(w http.ResponseWriter, r *http.Request) {
-// 	var (
-// 		vars       = mux.Vars(r)
-// 		imdbID     = vars["imdbID"]
-// 		reqBody, _ = ioutil.ReadAll(r.Body)
-// 		req        model.Request
-// 	)
+func (m *MovieHandler) AddMovie(w http.ResponseWriter, r *http.Request) {
+	var (
+		request = new(model.AddMovieRequest)
+		ctx     = r.Context()
+	)
 
-// 	json.Unmarshal(reqBody, &req)
+	err := json.NewDecoder(r.Body).Decode(&request)
+	if err != nil {
+		errMsg := errors.New("invalid request for adding movie")
+		log.Fatalln(errMsg)
+	}
 
-// 	resp, err := m.MovieUsecase.GetMovieDetail(imdbID)
-// 	if err != nil {
-// 		log.Fatalln(err)
-// 	}
+	var ok bool
+	if ok, err = isRequestValid(request); !ok {
+		log.Fatalln("invalid request: ", err)
+	}
 
-// 	w.Header().Set("Content-Type", "application/json")
-// 	w.WriteHeader(http.StatusAccepted)
-// 	w.Write(resp)
+	resp, err := m.MovieUsecase.AddMovie(ctx, *request)
+	if err != nil {
+		errMsg := errors.New("failed to add movie")
+		log.Fatalln(errMsg)
+	}
 
-// }
+	b, err := json.Marshal(resp)
+	if err != nil {
+		log.Fatalln("error: ", err)
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusAccepted)
+	w.Write(b)
+}
+
+func isRequestValid(m *model.AddMovieRequest) (bool, error) {
+	validate := validator.New()
+	err := validate.Struct(m)
+	if err != nil {
+		return false, err
+	}
+	return true, nil
+}
