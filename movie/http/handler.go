@@ -35,6 +35,7 @@ func NewRequestHandler(mu movieusecase.MovieUsecase) {
 	if port == "" {
 		port = "8080"
 	}
+	log.Println("Ver2")
 	log.Println("ACB_Movie REST API listening on port", port)
 
 	err := http.ListenAndServe(":8080", myRouter)
